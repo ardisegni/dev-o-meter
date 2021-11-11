@@ -46,10 +46,11 @@ public class RepositoryLogParser {
                 .filter(commitModel -> commitModel.author() != null && commitModel.date() != null && commitModel.changedFiles() != null)
                 .filter(commitModel -> !commitModel.author().isEmpty() && !commitModel.date().isEmpty() && !commitModel.changedFiles().isEmpty())
                 .collect(Collectors.groupingBy(CommitModel::author));
+        Set<String> allAuthors = authorCommitsMap.keySet();
         List<RepositoryAuthorStatsModel> repositoryAuthorStatsModels = new ArrayList<>(authorCommitsMap.size());
         for (Map.Entry<String, List<CommitModel>> entry : authorCommitsMap.entrySet()) {
             try {
-                RepositoryAuthorStatsModel authorStatsModel = buildRepositoryAuthorStats(entry);
+                RepositoryAuthorStatsModel authorStatsModel = buildRepositoryAuthorStats(entry, allAuthors);
                 if (authorStatsModel != null) {
                     repositoryAuthorStatsModels.add(authorStatsModel);
                 }
@@ -62,13 +63,13 @@ public class RepositoryLogParser {
         Function<RepositoryAuthorStatsModel, ProfileModel> statsToProfile = statsModel -> {
             Seniority seniority = Seniority.fromDate(statsModel.firstCommitDate());
             ProgrammingLanguage language = ProgrammingLanguage.fromExtension(statsModel.extension());
-            return new ProfileModel(statsModel.author(), seniority, language);
+            return new ProfileModel(statsModel.author(), seniority, language, statsModel.teamMembers());
         };
 
         return repositoryAuthorStatsModels.stream().map(statsToProfile).toList();
     }
 
-    private RepositoryAuthorStatsModel buildRepositoryAuthorStats(Map.Entry<String, List<CommitModel>> entry) throws ParseException {
+    private RepositoryAuthorStatsModel buildRepositoryAuthorStats(Map.Entry<String, List<CommitModel>> entry, Set<String> allAuthors) throws ParseException {
         RepositoryAuthorStatsModel authorStatsModel = null;
 
         String author = entry.getKey();
@@ -77,6 +78,8 @@ public class RepositoryLogParser {
                 .filter(commitModel -> commitModel.date() != null)
                 .min(Comparator.comparing(CommitModel::date))
                 .orElse(null);
+
+        List<String> teamMembers = allAuthors.stream().filter(otherAuthor -> !otherAuthor.equals(author)).toList();
 
         Date date = null;
         String extension;
@@ -98,7 +101,7 @@ public class RepositoryLogParser {
                 }
                 extension = FilenameUtils.getExtension(firstFile);
 
-                authorStatsModel = new RepositoryAuthorStatsModel(author, date, extension);
+                authorStatsModel = new RepositoryAuthorStatsModel(author, date, extension, teamMembers);
             }
         }
 
